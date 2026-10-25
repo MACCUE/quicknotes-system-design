@@ -1,43 +1,82 @@
-# QuickNotes API Design Document
-
-## 1. Overview
-This document specifies the RESTful API endpoints for the QuickNotes backend service. The API enables users to manage accounts, create, read, update, delete, and tag notes securely.
-
----
-
-## 2. API Endpoints Table
-
-| Method | Endpoint | Description | Success Status |
-| :--- | :--- | :--- | :--- |
-| **GET** | `/api/v1/notes` | Retrieve a paginated list of notes for the authenticated user. | `200 OK` |
-| **POST** | `/api/v1/notes` | Create a new note. | `201 Created` |
-| **GET** | `/api/v1/notes/{id}` | Retrieve a single note by its unique ID. | `200 OK` |
-| **PUT** | `/api/v1/notes/{id}` | Update an existing note completely. | `200 OK` |
-| **DELETE** | `/api/v1/notes/{id}` | Delete a note by its unique ID. | `204 No Content` |
-| **GET** | `/api/v1/tags` | Retrieve all available tags for organizing notes. | `200 OK` |
-
----
-
-## 3. Request & Response Examples
-
-### A. List Notes (`GET /api/v1/notes`)
-* **Request Headers:** `Authorization: Bearer <token>`
-* **Response Body (`200 OK`):**
-```json
-{
-  "status": "success",
-  "data": {
-    "page": 1,
-    "limit": 10,
-    "total": 1,
-    "notes": [
-      {
-        "id": 101,
-        "title": "System Architecture Review",
-        "body": "Discuss caching layers and database replication lag with the team.",
-        "user_id": 1,
-        "created_at": "2026-10-22T10:00:00Z"
-      }
-    ]
-  }
-}
+# QuickNotes API Design
+ 
+Base URL: `https://api.quicknotes.com/v1`
+All requests and responses use JSON. Every request (except sign-up and
+login) must include the header `Authorization: Bearer <token>` so the
+server knows which user is making it. Users can only access their own notes.
+ 
+## Endpoints
+ 
+| Method | Path                | Description                         | Success |
+|--------|---------------------|-------------------------------------|---------|
+| POST   | /auth/signup        | Create an account                   | 201     |
+| POST   | /auth/login         | Log in, returns a token             | 200     |
+| GET    | /notes              | List my notes (newest first)        | 200     |
+| GET    | /notes?search=&category=&page= | Filter, search and paginate | 200   |
+| GET    | /notes/{id}         | Get one note                        | 200     |
+| POST   | /notes              | Create a note                       | 201     |
+| PATCH  | /notes/{id}         | Update a note's text/category/tags  | 200     |
+| DELETE | /notes/{id}         | Delete a note                       | 204     |
+ 
+## Example: create a note
+ 
+Request: `POST /notes`
+ 
+    {
+      "text": "Revise HTTP status codes",
+      "category": "study",
+      "tags": ["exams"]
+    }
+ 
+Response: `201 Created`
+ 
+    {
+      "id": 42,
+      "text": "Revise HTTP status codes",
+      "category": "study",
+      "tags": ["exams"],
+      "createdAt": "2026-09-22T09:15:00Z",
+      "updatedAt": "2026-09-22T09:15:00Z"
+    }
+ 
+## Example: list notes
+ 
+Request: `GET /notes?category=study&page=1`
+ 
+Response: `200 OK`
+ 
+    {
+      "data": [
+        { "id": 42, "text": "Revise HTTP status codes",
+          "category": "study", "tags": ["exams"],
+          "createdAt": "2026-09-22T09:15:00Z" }
+      ],
+      "page": 1,
+      "pageSize": 20,
+      "total": 1
+    }
+ 
+Lists are **paginated** (returned in pages of 20) so a user with
+thousands of notes does not receive them all at once.
+ 
+## Validation rules
+ 
+- `text` is required and must be 1-200 characters.
+- `category` must be one of `personal`, `work`, `study`.
+- `tags` is optional: an array of up to 5 strings.
+ 
+## Errors
+ 
+Every error returns the same JSON shape:
+ 
+    { "error": { "code": "VALIDATION_ERROR",
+                 "message": "Text must be 1-200 characters." } }
+ 
+| Status | When it happens                                   |
+|--------|---------------------------------------------------|
+| 400    | Invalid data (e.g. empty text, unknown category)  |
+| 401    | Missing or invalid login token                    |
+| 403    | Trying to access another user's note              |
+| 404    | Note does not exist                               |
+| 429    | Too many requests (limit: 100 per minute)         |
+| 500    | Unexpected server error                           |
